@@ -3,14 +3,14 @@ import pandas as pd
 import os
 from datetime import datetime
 
-# =============================
+# =========================
 # إعداد الصفحة
-# =============================
-st.set_page_config(page_title="منظومة إتقان الاحترافية", layout="wide", page_icon="🌟")
+# =========================
+st.set_page_config(page_title="منظومة إتقان", layout="wide", page_icon="🌟")
 
-# =============================
+# =========================
 # الملفات + الأعمدة
-# =============================
+# =========================
 FILES = {
     "bio": ("db_bio.csv", ['ID','الاسم','العمر','الصف','الهاتف','الإيميل']),
     "att": ("db_att.csv", ['التاريخ','ID','الحالة']),
@@ -18,9 +18,9 @@ FILES = {
     "grades": ("db_grades.csv", ['ID','القرآن','الفقه','الحديث','السيرة','المعدل','التقدير'])
 }
 
-# =============================
-# دوال قاعدة البيانات
-# =============================
+# =========================
+# DB
+# =========================
 def load_db(name):
     file, cols = FILES[name]
     if not os.path.exists(file):
@@ -35,15 +35,15 @@ def save_db(df, name):
     file, _ = FILES[name]
     df.to_csv(file, index=False, encoding="utf-8-sig")
 
-# =============================
-# تسجيل الدخول
-# =============================
+# =========================
+# LOGIN
+# =========================
 if "auth" not in st.session_state:
     st.session_state.auth = False
 
 if not st.session_state.auth:
-    st.title("🔐 تسجيل الدخول")
-    u = st.text_input("اسم المستخدم")
+    st.title("🔐 دخول النظام")
+    u = st.text_input("المستخدم")
     p = st.text_input("كلمة المرور", type="password")
 
     if st.button("دخول"):
@@ -51,164 +51,185 @@ if not st.session_state.auth:
             st.session_state.auth = True
             st.rerun()
         else:
-            st.error("بيانات خاطئة")
+            st.error("خطأ")
     st.stop()
 
-# =============================
-# تحميل البيانات
-# =============================
+# =========================
+# LOAD DATA
+# =========================
 BIO = load_db("bio")
 ATT = load_db("att")
-HIFZ = load_db("hifz")
 GRADES = load_db("grades")
-
-# إصلاح ID تلقائي
-if BIO['ID'].eq("").any():
-    BIO['ID'] = [f"ID-{i+1}" for i in range(len(BIO))]
-    save_db(BIO,"bio")
+HIFZ = load_db("hifz")
 
 student_map = dict(zip(BIO['ID'], BIO['الاسم']))
 
-# =============================
-# القوائم
-# =============================
-ages = [str(i) for i in range(5, 60)]
-grades_list = ["الأول","الثاني","الثالث","الرابع","الخامس","السادس"]
-phones = [f"05{str(i).zfill(8)}" for i in range(100)]
-emails = ["student@itqan.com","user@itqan.com","admin@itqan.com"]
-parts = [f"جزء {i}" for i in range(1,31)]
-pages = [str(i) for i in range(1,51)]
-status_list = ["حاضر","غائب","متأخر","بعذر"]
-evals = ["ممتاز","جيد جداً","جيد","مقبول","ضعيف"]
-marks = list(range(0,101))
+# =========================
+# RESET FORM (المفتاح لحلك)
+# =========================
+def reset_student_form():
+    keys = [
+        "name","sid","age","grade","phone","email","selector"
+    ]
+    for k in keys:
+        st.session_state[k] = ""
 
-# =============================
-# القائمة الجانبية
-# =============================
+# أول مرة
+for k in ["name","sid","age","grade","phone","email","selector"]:
+    if k not in st.session_state:
+        st.session_state[k] = ""
+
+# =========================
+# MENU
+# =========================
 menu = st.sidebar.radio("القائمة",[
     "👨‍🎓 الطلاب",
     "📅 الحضور",
     "📖 الحفظ",
     "🎯 الدرجات",
-    "📊 التقارير"
+    "📋 التقرير الشامل"
 ])
 
-# =============================
+# =========================
 # 1. الطلاب
-# =============================
+# =========================
 if menu == "👨‍🎓 الطلاب":
     st.header("إدارة الطلاب")
 
-    with st.form("add_student"):
+    choice = st.selectbox(
+        "اختر طالب أو جديد",
+        ["➕ جديد"] + BIO['الاسم'].tolist(),
+        key="selector"
+    )
+
+    if choice != "➕ جديد":
+        row = BIO[BIO['الاسم']==choice].iloc[0]
+        st.session_state.sid = row['ID']
+        st.session_state.name = row['الاسم']
+        st.session_state.age = row['العمر']
+        st.session_state.grade = row['الصف']
+        st.session_state.phone = row['الهاتف']
+        st.session_state.email = row['الإيميل']
+    else:
+        reset_student_form()
+
+    with st.form("student_form"):
+        st.session_state.name = st.text_input("الاسم", st.session_state.name)
+        st.session_state.sid = st.text_input("ID", st.session_state.sid)
+
         c1,c2 = st.columns(2)
 
         with c1:
-            name = st.text_input("الاسم")
-            age = st.selectbox("العمر", [""]+ages)
+            st.session_state.age = st.text_input("العمر", st.session_state.age)
+            st.session_state.grade = st.text_input("الصف", st.session_state.grade)
 
         with c2:
-            sid = st.text_input("ID")
-            grade = st.selectbox("الصف", [""]+grades_list)
+            st.session_state.phone = st.text_input("الهاتف", st.session_state.phone)
+            st.session_state.email = st.text_input("الإيميل", st.session_state.email)
 
-        phone = st.selectbox("الهاتف", [""]+phones)
-        email = st.selectbox("الإيميل", [""]+emails)
+        save = st.form_submit_button("💾 حفظ")
 
-        if st.form_submit_button("💾 حفظ"):
-            if not name or not sid:
-                st.error("أدخل الاسم و ID")
-            else:
-                BIO2 = BIO[BIO['ID']!=sid]
-                new = pd.DataFrame([[sid,name,age,grade,phone,email]], columns=BIO.columns)
-                save_db(pd.concat([BIO2,new],ignore_index=True),"bio")
-                st.success("تم الحفظ")
-                st.rerun()
+        if save:
+            BIO2 = BIO[BIO['ID'] != st.session_state.sid]
+            new = pd.DataFrame([[
+                st.session_state.sid,
+                st.session_state.name,
+                st.session_state.age,
+                st.session_state.grade,
+                st.session_state.phone,
+                st.session_state.email
+            ]], columns=BIO.columns)
+
+            save_db(pd.concat([BIO2,new],ignore_index=True),"bio")
+
+            st.success("تم الحفظ")
+
+            # 🔥 أهم سطر: تفريغ فوري
+            reset_student_form()
+            st.rerun()
+
+    # زر جديد مستقل
+    if st.button("🆕 طالب جديد"):
+        reset_student_form()
+        st.rerun()
 
     st.dataframe(BIO,use_container_width=True)
 
-# =============================
+# =========================
 # 2. الحضور
-# =============================
+# =========================
 elif menu == "📅 الحضور":
     st.header("الحضور")
 
-    if BIO.empty:
-        st.warning("لا يوجد طلاب")
-    else:
-        with st.form("att"):
-            sid = st.selectbox("الطالب", list(student_map.keys()), format_func=lambda x: student_map[x])
-            status = st.selectbox("الحالة", status_list)
+    sid = st.selectbox("الطالب", list(student_map.keys()), format_func=lambda x: student_map[x])
+    status = st.selectbox("الحالة", ["حاضر","غائب","بعذر"])
 
-            if st.form_submit_button("حفظ"):
-                new = pd.DataFrame([[datetime.now().date(),sid,status]], columns=ATT.columns)
-                save_db(pd.concat([ATT,new],ignore_index=True),"att")
-                st.success("تم الحفظ")
-                st.rerun()
+    if st.button("حفظ"):
+        new = pd.DataFrame([[datetime.now().date(),sid,status]], columns=ATT.columns)
+        save_db(pd.concat([ATT,new],ignore_index=True),"att")
+        st.success("تم")
 
-# =============================
+# =========================
 # 3. الحفظ
-# =============================
+# =========================
 elif menu == "📖 الحفظ":
-    st.header("متابعة الحفظ")
+    st.header("الحفظ")
 
-    if BIO.empty:
-        st.warning("لا يوجد طلاب")
-    else:
-        with st.form("hifz"):
-            sid = st.selectbox("الطالب", list(student_map.keys()), format_func=lambda x: student_map[x])
-            part = st.selectbox("الجزء", parts)
-            page = st.selectbox("الصفحة", pages)
-            rating = st.selectbox("التقييم", evals)
+    sid = st.selectbox("الطالب", list(student_map.keys()), format_func=lambda x: student_map[x])
+    part = st.selectbox("الجزء", [str(i) for i in range(1,31)])
+    page = st.selectbox("الصفحة", [str(i) for i in range(1,51)])
+    rate = st.selectbox("التقييم", ["ممتاز","جيد","مقبول"])
 
-            if st.form_submit_button("حفظ"):
-                new = pd.DataFrame([[sid,part,"",page,rating]], columns=HIFZ.columns)
-                save_db(pd.concat([HIFZ,new],ignore_index=True),"hifz")
-                st.success("تم الحفظ")
-                st.rerun()
+    if st.button("حفظ"):
+        new = pd.DataFrame([[sid,part,"",page,rate]], columns=HIFZ.columns)
+        save_db(pd.concat([HIFZ,new],ignore_index=True),"hifz")
+        st.success("تم")
 
-# =============================
+# =========================
 # 4. الدرجات
-# =============================
+# =========================
 elif menu == "🎯 الدرجات":
     st.header("الدرجات")
 
-    if BIO.empty:
-        st.warning("لا يوجد طلاب")
-    else:
-        with st.form("grades"):
-            sid = st.selectbox("الطالب", list(student_map.keys()), format_func=lambda x: student_map[x])
+    sid = st.selectbox("الطالب", list(student_map.keys()), format_func=lambda x: student_map[x])
 
-            q = st.selectbox("القرآن", marks)
-            f = st.selectbox("الفقه", marks)
-            h = st.selectbox("الحديث", marks)
-            s = st.selectbox("السيرة", marks)
+    q = st.slider("القرآن",0,100)
+    f = st.slider("الفقه",0,100)
+    h = st.slider("الحديث",0,100)
+    s = st.slider("السيرة",0,100)
 
-            if st.form_submit_button("حساب"):
-                avg = (q*0.5)+(((f+h+s)/3)*0.5)
-                grade = "ممتاز" if avg>=90 else "جيد جداً" if avg>=80 else "جيد" if avg>=70 else "مقبول"
+    if st.button("حساب"):
+        avg = (q*0.5)+(((f+h+s)/3)*0.5)
+        grade = "ممتاز" if avg>=90 else "جيد جداً" if avg>=80 else "جيد" if avg>=70 else "مقبول"
 
-                new = pd.DataFrame([[sid,q,f,h,s,avg,grade]], columns=GRADES.columns)
-                save_db(pd.concat([GRADES[GRADES['ID']!=sid],new],ignore_index=True),"grades")
+        new = pd.DataFrame([[sid,q,f,h,s,avg,grade]], columns=GRADES.columns)
+        save_db(pd.concat([GRADES[GRADES['ID']!=sid],new],ignore_index=True),"grades")
 
-                st.metric("المعدل", round(avg,2))
-                st.success(grade)
+        st.success(f"{grade} - {avg:.2f}")
 
-# =============================
-# 5. التقارير (Dashboard)
-# =============================
-elif menu == "📊 التقارير":
-    st.header("لوحة التحكم")
+# =========================
+# 5. التقرير الشامل (FULL DATA)
+# =========================
+elif menu == "📋 التقرير الشامل":
+    st.header("📊 تقرير شامل للنظام")
 
-    st.metric("عدد الطلاب", len(BIO))
-    st.metric("الحضور", len(ATT))
-    st.metric("السجلات", len(GRADES))
+    col1,col2,col3,col4 = st.columns(4)
+    col1.metric("الطلاب", len(BIO))
+    col2.metric("الحضور", len(ATT))
+    col3.metric("الحفظ", len(HIFZ))
+    col4.metric("الدرجات", len(GRADES))
 
-    if not GRADES.empty:
-        df = GRADES.copy()
-        df['المعدل'] = pd.to_numeric(df['المعدل'], errors='coerce')
-        df = df.dropna()
+    st.subheader("👨‍🎓 الطلاب")
+    st.dataframe(BIO, use_container_width=True)
 
-        if not df.empty:
-            st.bar_chart(df.set_index("ID")["المعدل"])
+    st.subheader("📅 الحضور")
+    st.dataframe(ATT, use_container_width=True)
+
+    st.subheader("📖 الحفظ")
+    st.dataframe(HIFZ, use_container_width=True)
+
+    st.subheader("🎯 الدرجات")
+    st.dataframe(GRADES, use_container_width=True)
 
 
 
