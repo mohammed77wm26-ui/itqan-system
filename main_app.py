@@ -53,7 +53,7 @@ emails = ["", "student@itqan.com", "user@itqan.com", "admin@itqan.com"]
 
 menu = st.sidebar.radio("القائمة الرئيسية", ["🏠 إدارة الطلاب", "✅ التحضير اليومي", "📖 متابعة الحفظ", "🎯 رصد الدرجات", "📋 السجل العام"])
 
-# --- الشاشة 1: إدارة الطلاب (تعديل + حذف شامل) ---
+# --- الشاشة 1: إدارة الطلاب (مع ميزة الحذف الشامل من التقارير) ---
 if menu == "🏠 إدارة الطلاب":
     st.header("👤 إدارة بيانات الطلاب")
     df_bio = load_data("bio")
@@ -68,7 +68,7 @@ if menu == "🏠 إدارة الطلاب":
     action = st.radio("الإجراء:", ["إضافة طالب جديد", "تعديل / حذف طالب"], horizontal=True)
 
     if action == "تعديل / حذف طالب":
-        target = st.selectbox("اختر الطالب لتعديل بياناته:", [""] + df_bio['الاسم'].tolist())
+        target = st.selectbox("اختر الطالب للإجراء:", [""] + df_bio['الاسم'].tolist())
         if target:
             row = df_bio[df_bio['الاسم'] == target].iloc[0]
             with st.form("edit_student_form"):
@@ -82,27 +82,26 @@ if menu == "🏠 إدارة الطلاب":
                 
                 b1, b2 = st.columns(2)
                 if b1.form_submit_button("💾 حفظ التعديلات", use_container_width=True):
-                    # تحديث الاسم في جميع الجداول إذا تغير
+                    # تحديث الاسم في كل الملفات إذا تم تغييره
                     if u_name != target:
-                        for key in ["att", "hifz", "grades"]:
-                            temp_df = load_data(key)
-                            temp_df.loc[temp_df['الاسم'] == target, 'الاسم'] = u_name
-                            save_data(temp_df, key)
+                        for k in ["att", "hifz", "grades"]:
+                            df_temp = load_data(k)
+                            df_temp.loc[df_temp['الاسم'] == target, 'الاسم'] = u_name
+                            save_data(df_temp, k)
                     
                     df_bio = df_bio[df_bio['الاسم'] != target]
                     new_r = pd.DataFrame([[u_name, u_id, u_age, u_grade, u_phone, u_email]], columns=DB_CONFIG["bio"]["cols"])
                     save_data(pd.concat([df_bio, new_r], ignore_index=True), "bio")
-                    st.success("تم تحديث البيانات في جميع السجلات")
+                    st.success("تم تحديث البيانات في كل السجلات")
                     st.rerun()
 
-                if b2.form_submit_button("🗑️ حذف الطالب نهائياً", use_container_width=True):
-                    # الحذف التلقائي والشامل من جميع الملفات
-                    save_data(df_bio[df_bio['الاسم'] != target], "bio") # حذف من سجل الطلاب
-                    for key in ["att", "hifz", "grades"]:
-                        temp_df = load_data(key)
-                        save_data(temp_df[temp_df['الاسم'] != target], key) # حذف من التقارير
-                    
-                    st.warning(f"تم حذف {target} وجميع سجلاته من النظام بنجاح")
+                if b2.form_submit_button("🗑️ حذف شامل من المنظومة", use_container_width=True):
+                    # الحذف الآلي المترابط من كل التقارير (حل مشكلتك)
+                    save_data(df_bio[df_bio['الاسم'] != target], "bio")
+                    for k in ["att", "hifz", "grades"]:
+                        df_temp = load_data(k)
+                        save_data(df_temp[df_temp['الاسم'] != target], k)
+                    st.warning(f"تم حذف {target} وجميع سجلاته نهائياً")
                     st.rerun()
     else:
         with st.form("add_student_form", clear_on_submit=True):
@@ -120,28 +119,17 @@ if menu == "🏠 إدارة الطلاب":
                     st.success("تمت الإضافة")
                     st.rerun()
 
-# --- بقية الشاشات (الحفظ، التحضير، الدرجات، السجل) مستقرة كما هي ---
-elif menu == "✅ التحضير اليومي":
-    st.header("✅ التحضير")
-    bio = load_data("bio")
-    att = load_data("att")
-    with st.form("att_form", clear_on_submit=True):
-        s = st.selectbox("الطالب", [""] + bio['الاسم'].tolist())
-        h = st.selectbox("الحالة", ["حاضر", "غائب", "متأخر", "معتذر"])
-        if st.form_submit_button("حفظ"):
-            new = pd.DataFrame([[datetime.today().strftime('%Y-%m-%d'), s, h]], columns=DB_CONFIG["att"]["cols"])
-            save_data(pd.concat([att, new], ignore_index=True), "att")
-            st.success("تم الحفظ")
-
+# --- بقية الشاشات (مستقرة كما هي) ---
 elif menu == "📖 متابعة الحفظ":
     st.header("📖 متابعة حفظ القرآن")
     bio = load_data("bio")
     hifz = load_data("hifz")
-    with st.form("hifz_form", clear_on_submit=True):
+    with st.form("hifz_pro_form", clear_on_submit=True):
         st_name = st.selectbox("اسم الطالب", [""] + bio['الاسم'].tolist())
         c1, c2, c3 = st.columns([2, 2, 1])
-        part = c1.selectbox("الجزء", [str(i) for i in range(1, 31)])
-        surah = c1.selectbox("السورة", quran_surahs)
+        with c1:
+            part = st.selectbox("الجزء", [str(i) for i in range(1, 31)])
+            surah = st.selectbox("السورة", quran_surahs)
         pages = c2.number_input("عدد الصفحات", 1, 100, 1)
         errors = c3.number_input("الأخطاء", 0, 50, 0)
         if st.form_submit_button("💾 حفظ السجل"):
@@ -149,10 +137,23 @@ elif menu == "📖 متابعة الحفظ":
                 ev = "ممتاز" if errors == 0 else "جيد جداً" if errors <= 2 else "جيد" if errors <= 4 else "يحتاج متابعة"
                 new_h = pd.DataFrame([[st_name, part, surah, pages, errors, ev]], columns=DB_CONFIG["hifz"]["cols"])
                 save_data(pd.concat([hifz, new_h], ignore_index=True), "hifz")
-                st.success(f"التقييم: {ev}")
+                st.success(f"التقييم الآلي: {ev}")
+
+elif menu == "✅ التحضير اليومي":
+    st.header("✅ سجل التحضير")
+    bio = load_data("bio")
+    att = load_data("att")
+    with st.form("att_form", clear_on_submit=True):
+        s = st.selectbox("الطالب", [""] + bio['الاسم'].tolist())
+        h = st.selectbox("الحالة", ["حاضر", "غائب", "متأخر", "معتذر"])
+        if st.form_submit_button("حفظ"):
+            if s:
+                new = pd.DataFrame([[datetime.today().strftime('%Y-%m-%d'), s, h]], columns=DB_CONFIG["att"]["cols"])
+                save_data(pd.concat([att, new], ignore_index=True), "att")
+                st.success("تم التحضير")
 
 elif menu == "🎯 رصد الدرجات":
-    st.header("🎯 الدرجات")
+    st.header("🎯 رصد الدرجات")
     bio = load_data("bio")
     gr = load_data("grades")
     with st.form("gr_form", clear_on_submit=True):
@@ -160,15 +161,16 @@ elif menu == "🎯 رصد الدرجات":
         c1, c2 = st.columns(2)
         q, f = c1.number_input("قرآن", 0, 100), c1.number_input("فقه", 0, 100)
         h, si = c2.number_input("حديث", 0, 100), c2.number_input("سيرة", 0, 100)
-        if st.form_submit_button("رصد"):
-            avg = round((q*0.5) + (((f+h+si)/3)*0.5), 2)
-            t = "ممتاز" if avg >= 90 else "جيد جداً" if avg >= 80 else "جيد" if avg >= 70 else "مقبول"
-            new = pd.DataFrame([[s, q, f, h, si, avg, t]], columns=DB_CONFIG["grades"]["cols"])
-            save_data(pd.concat([gr[gr['الاسم'] != s], new], ignore_index=True), "grades")
-            st.success(f"تم رصد الدرجة")
+        if st.form_submit_button("رصد الدرجة"):
+            if s:
+                avg = round((q*0.5) + (((f+h+si)/3)*0.5), 2)
+                t = "ممتاز" if avg >= 90 else "جيد جداً" if avg >= 80 else "جيد" if avg >= 70 else "مقبول"
+                new = pd.DataFrame([[s, q, f, h, si, avg, t]], columns=DB_CONFIG["grades"]["cols"])
+                save_data(pd.concat([gr[gr['الاسم'] != s], new], ignore_index=True), "grades")
+                st.success(f"تم الرصد بنجاح (المعدل: {avg})")
 
 elif menu == "📋 السجل العام":
-    st.header("📋 التقارير")
+    st.header("📋 التقارير المركزية")
     t1, t2, t3, t4 = st.tabs(["الطلاب", "الحفظ", "التحضير", "الدرجات"])
     with t1: st.dataframe(load_data("bio"), use_container_width=True)
     with t2: st.dataframe(load_data("hifz"), use_container_width=True)
