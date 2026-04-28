@@ -4,140 +4,441 @@ import os
 from datetime import datetime
 
 # =========================
-# إعدادات النظام الأساسية
+# إعدادات عامة
 # =========================
-st.set_page_config(page_title="منظومة إتقان الاحترافية", layout="wide", page_icon="🌟")
+st.set_page_config(
+    page_title="منظومة إتقان الاحترافية",
+    layout="wide",
+    page_icon="🌟"
+)
 
-# تعريف هيكل البيانات لضمان عدم تداخل الأعمدة (حل مشكلة البيانات العشوائية)
-DB_CONFIG = {
-    "bio": {"file": "db_bio.csv", "cols": ['الاسم', 'الرقم', 'العمر', 'الصف', 'الهاتف', 'الإيميل']},
-    "grades": {"file": "db_grades.csv", "cols": ['الاسم', 'القرآن', 'الفقه', 'الحديث', 'السيرة', 'المعدل', 'التقدير']}
-}
+# =========================
+# ثوابت الملفات والأعمدة
+# =========================
+DB_BIO_FILE = "db_bio.csv"
+DB_ATT_FILE = "db_att.csv"
+DB_HIFZ_FILE = "db_hifz.csv"
+DB_GRADES_FILE = "db_grades.csv"
 
-def load_data(key):
-    config = DB_CONFIG[key]
-    if not os.path.exists(config["file"]):
-        pd.DataFrame(columns=config["cols"]).to_csv(config["file"], index=False, encoding="utf-8-sig")
-    df = pd.read_csv(config["file"], encoding="utf-8-sig")
-    # التأكد من مطابقة الأعمدة تماماً للهيكل المعتمد
-    df = df.reindex(columns=config["cols"]).fillna("")
-    return df
+BIO_COLUMNS = ['الرقم', 'الاسم', 'العمر', 'الصف', 'الهاتف', 'الإيميل']
+ATT_COLUMNS = ['التاريخ', 'الاسم', 'الحالة']
+HIFZ_COLUMNS = ['الاسم', 'الجزء', 'السورة', 'الصفحات', 'التقييم']
+GRADES_COLUMNS = ['الاسم', 'القرآن', 'الفقه', 'الحديث', 'السيرة', 'المعدل', 'التقدير']
 
-def save_data(df, key):
-    config = DB_CONFIG[key]
-    df.to_csv(config["file"], index=False, encoding="utf-8-sig")
+
+# =========================
+# دوال مساعدة للملفات
+# =========================
+def ensure_db(file_name: str, columns: list):
+    if not os.path.exists(file_name):
+        pd.DataFrame(columns=columns).to_csv(file_name, index=False, encoding="utf-8-sig")
+
+
+def load_db(file_name: str, columns: list) -> pd.DataFrame:
+    ensure_db(file_name, columns)
+    df = pd.read_csv(file_name, encoding="utf-8-sig")
+    for col in columns:
+        if col not in df.columns:
+            df[col] = ""
+    return df[columns]
+
+
+def save_db(df: pd.DataFrame, file_name: str):
+    df.to_csv(file_name, index=False, encoding="utf-8-sig")
+
+
+def reset_all_dbs():
+    pd.DataFrame(columns=BIO_COLUMNS).to_csv(DB_BIO_FILE, index=False, encoding="utf-8-sig")
+    pd.DataFrame(columns=ATT_COLUMNS).to_csv(DB_ATT_FILE, index=False, encoding="utf-8-sig")
+    pd.DataFrame(columns=HIFZ_COLUMNS).to_csv(DB_HIFZ_FILE, index=False, encoding="utf-8-sig")
+    pd.DataFrame(columns=GRADES_COLUMNS).to_csv(DB_GRADES_FILE, index=False, encoding="utf-8-sig")
+
 
 # =========================
 # نظام الدخول
 # =========================
-if 'auth' not in st.session_state: st.session_state.auth = False
+if 'auth' not in st.session_state:
+    st.session_state.auth = False
+if 'username' not in st.session_state:
+    st.session_state.username = ""
+
 if not st.session_state.auth:
-    st.markdown("<h2 style='text-align: center;'>🔐 دخول النظام</h2>", unsafe_allow_html=True)
-    with st.container():
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            u = st.text_input("اسم المستخدم").strip()
-            p = st.text_input("كلمة المرور", type="password").strip()
-            if st.button("دخول بالنظام", use_container_width=True):
-                if u.upper() == "ASSAF" and p == "7734":
-                    st.session_state.auth = True
-                    st.rerun()
-                else: st.error("❌ بيانات الدخول خاطئة")
+    st.markdown(
+        "<h2 style='text-align: center;'>🔐 دخول منظومة إتقان الاحترافية</h2>",
+        unsafe_allow_html=True
+    )
+    c1, c2, c3 = st.columns([1, 1, 1])
+    with c2:
+        u = st.text_input("اسم المستخدم").strip()
+        p = st.text_input("كلمة المرور", type="password").strip()
+        if st.button("دخول", use_container_width=True):
+            if u.upper() in ["ASSAF", "عساف"] and p == "7734":
+                st.session_state.auth = True
+                st.session_state.username = u
+                st.rerun()
+            else:
+                st.error("خطأ في البيانات")
     st.stop()
 
 # =========================
-# تهيئة متغيرات الحالة (لحل مشكلة Reset الحقول)
+# القوائم الثابتة
 # =========================
-if 'reset_trigger' not in st.session_state: st.session_state.reset_trigger = False
-
-def clear_fields():
-    for key in ['name', 'age', 'grade', 'id', 'phone', 'email']:
-        st.session_state[f'val_{key}'] = ""
-
-# القوائم المنسدلة
-stages = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "متوسط", "ثانوي", "جامعي"]
+stages = [
+    "", "الأول الابتدائي", "الثاني الابتدائي", "الثالث الابتدائي", "الرابع الابتدائي",
+    "الخامس الابتدائي", "السادس الابتدائي", "الأول المتوسط", "الثاني المتوسط", "الثالث المتوسط",
+    "الأول الثانوي", "الثاني الثانوي", "الثالث الثانوي", "جامعي"
+]
 ages = [""] + [str(i) for i in range(5, 51)]
-ids = [""] + [f"ID-{i}" for i in range(100, 1000)]
-phones = [""] + [f"05{str(i).zfill(8)}" for i in range(1, 1000)]
-emails = ["", "student@itqan.com", "user@itqan.com", "admin@itqan.com"]
+ids_list = [""] + [f"ID-{i}" for i in range(100, 500)]
+phones_list = [""] + [f"05{str(i).zfill(8)}" for i in range(1, 100)]
+emails_list = ["", "student@itqan.com", "admin@itqan.com", "user@itqan.com"]
+
+attendance_status = ["حاضر", "غائب", "متأخر", "معتذر"]
+hifz_eval_list = ["ممتاز", "جيد جداً", "جيد", "مقبول", "يحتاج متابعة"]
+parts_list = [str(i) for i in range(1, 31)]
+
+# =========================
+# شريط علوي
+# =========================
+top_col1, top_col2 = st.columns([3, 1])
+with top_col1:
+    st.markdown(
+        """
+        <div style="padding:10px; border-radius:10px; background:linear-gradient(90deg,#1e3c72,#2a5298); color:white;">
+        <h2>🌟 منظومة إتقان الاحترافية</h2>
+        <p>نظام متكامل لإدارة بيانات الطلاب والتحضير والحفظ والدرجات</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+with top_col2:
+    st.markdown(f"#### 👤 المستخدم: **{st.session_state.username}**")
+    if st.button("تسجيل خروج"):
+        st.session_state.auth = False
+        st.session_state.username = ""
+        st.rerun()
+
+
+# =========================
+# شاشة بيانات الطلاب — تفريغ تلقائي + زر جديد
+# =========================
+def screen_students():
+    st.header("📝 إدارة بيانات الطلاب")
+
+    bio_df = load_db(DB_BIO_FILE, BIO_COLUMNS)
+    names_in_db = bio_df['الاسم'].dropna().tolist()
+    student_list = ["➕ إضافة طالب جديد"] + names_in_db
+
+    selected_name = st.selectbox(
+        "🎯 اختر طالباً أو أضف جديداً",
+        student_list,
+        key="student_selector"
+    )
+
+    # مفاتيح الحقول في session_state
+    field_keys = ["name_input", "age_val", "grade_val", "id_val", "phone_val", "email_val"]
+    defaults = {
+        "name_input": "",
+        "age_val": "",
+        "grade_val": "",
+        "id_val": "",
+        "phone_val": "",
+        "email_val": ""
+    }
+    for k, v in defaults.items():
+        st.session_state.setdefault(k, v)
+
+    # زر "جديد" لمسح الحقول يدوياً
+    if st.button("🆕 جديد (تفريغ الحقول)"):
+        for k in field_keys:
+            st.session_state[k] = ""
+        # لا نلمس selectbox نفسه حتى لا نصطدم بقيود Streamlit
+        st.success("تم تفريغ الحقول، يمكنك إدخال طالب جديد.")
+        st.experimental_rerun()
+
+    # تعبئة الحقول عند اختيار طالب
+    if selected_name != "➕ إضافة طالب جديد" and st.session_state.name_input == "":
+        row = bio_df[bio_df['الاسم'] == selected_name].iloc[0]
+        st.session_state.name_input = str(row['الاسم'])
+        st.session_state.age_val = str(row['العمر'])
+        st.session_state.grade_val = str(row['الصف'])
+        st.session_state.id_val = str(row['الرقم'])
+        st.session_state.phone_val = str(row['الهاتف'])
+        st.session_state.email_val = str(row['الإيميل'])
+
+    btn_label = "تحديث البيانات" if selected_name != "➕ إضافة طالب جديد" else "حفظ طالب جديد"
+
+    col_form, col_info = st.columns([2, 1])
+
+    with col_form:
+        with st.form("bio_form"):
+            st.session_state.name_input = st.text_input("الاسم الثلاثي", st.session_state.name_input)
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.session_state.age_val = st.selectbox(
+                    "العمر", ages,
+                    index=ages.index(st.session_state.age_val) if st.session_state.age_val in ages else 0
+                )
+                st.session_state.grade_val = st.selectbox(
+                    "الصف الدراسي", stages,
+                    index=stages.index(st.session_state.grade_val) if st.session_state.grade_val in stages else 0
+                )
+            with c2:
+                st.session_state.id_val = st.selectbox(
+                    "الرقم التسلسلي", ids_list,
+                    index=ids_list.index(st.session_state.id_val) if st.session_state.id_val in ids_list else 0
+                )
+                st.session_state.phone_val = st.selectbox(
+                    "رقم الهاتف", phones_list,
+                    index=phones_list.index(st.session_state.phone_val) if st.session_state.phone_val in phones_list else 0
+                )
+
+            st.session_state.email_val = st.selectbox(
+                "البريد الإلكتروني", emails_list,
+                index=emails_list.index(st.session_state.email_val) if st.session_state.email_val in emails_list else 0
+            )
+
+            if st.form_submit_button(btn_label):
+                if not st.session_state.name_input:
+                    st.error("الرجاء إدخال اسم الطالب.")
+                elif not st.session_state.id_val:
+                    st.error("الرجاء اختيار الرقم التسلسلي.")
+                else:
+                    clean_bio = bio_df[bio_df['الاسم'] != selected_name] if selected_name != "➕ إضافة طالب جديد" else bio_df
+                    new_entry = pd.DataFrame([[
+                        st.session_state.id_val,
+                        st.session_state.name_input,
+                        st.session_state.age_val,
+                        st.session_state.grade_val,
+                        st.session_state.phone_val,
+                        st.session_state.email_val
+                    ]], columns=BIO_COLUMNS)
+                    updated = pd.concat([clean_bio, new_entry], ignore_index=True)
+                    save_db(updated, DB_BIO_FILE)
+
+                    # تفريغ الحقول فوراً بعد الحفظ
+                    for k in field_keys:
+                        st.session_state[k] = ""
+
+                    st.success("✅ تم الحفظ وتم تفريغ الحقول لإضافة طالب جديد.")
+                    st.experimental_rerun()
+
+        if selected_name != "➕ إضافة طالب جديد":
+            if st.button("🗑️ حذف هذا الطالب وجميع سجلاته", type="primary"):
+                att_df = load_db(DB_ATT_FILE, ATT_COLUMNS)
+                hifz_df = load_db(DB_HIFZ_FILE, HIFZ_COLUMNS)
+                grades_df = load_db(DB_GRADES_FILE, GRADES_COLUMNS)
+
+                bio_df = bio_df[bio_df['الاسم'] != selected_name]
+                att_df = att_df[att_df['الاسم'] != selected_name]
+                hifz_df = hifz_df[hifz_df['الاسم'] != selected_name]
+                grades_df = grades_df[grades_df['الاسم'] != selected_name]
+
+                save_db(bio_df, DB_BIO_FILE)
+                save_db(att_df, DB_ATT_FILE)
+                save_db(hifz_df, DB_HIFZ_FILE)
+                save_db(grades_df, DB_GRADES_FILE)
+
+                for k in field_keys:
+                    st.session_state[k] = ""
+
+                st.success("🚮 تم حذف الطالب وكل متعلقاته.")
+                st.experimental_rerun()
+
+    with col_info:
+        if selected_name != "➕ إضافة طالب جديد":
+            st.markdown("### 🧾 بطاقة الطالب")
+            st.markdown(f"**الاسم:** {st.session_state.name_input}")
+            st.markdown(f"**العمر:** {st.session_state.age_val}")
+            st.markdown(f"**الصف:** {st.session_state.grade_val}")
+            st.markdown(f"**الرقم:** {st.session_state.id_val}")
+            st.markdown(f"**الهاتف:** {st.session_state.phone_val}")
+            st.markdown(f"**الإيميل:** {st.session_state.email_val}")
+        else:
+            st.info("اختر طالباً من القائمة لعرض بياناته هنا.")
+
+
+# =========================
+# شاشة التحضير — قوائم منسدلة بالكامل
+# =========================
+def screen_attendance():
+    st.header("✅ التحضير اليومي")
+
+    bio_df = load_db(DB_BIO_FILE, BIO_COLUMNS)
+    att_df = load_db(DB_ATT_FILE, ATT_COLUMNS)
+
+    with st.form("att_form"):
+        date_val = st.date_input("التاريخ", datetime.today())
+        student = st.selectbox("الطالب", [""] + bio_df['الاسم'].dropna().tolist())
+        status = st.selectbox("الحالة", attendance_status)
+
+        if st.form_submit_button("حفظ التحضير"):
+            if not student:
+                st.error("اختر الطالب.")
+            else:
+                new_att = pd.DataFrame([[date_val.strftime("%Y-%m-%d"), student, status]], columns=ATT_COLUMNS)
+                updated = pd.concat([att_df, new_att], ignore_index=True)
+                save_db(updated, DB_ATT_FILE)
+                st.success("تم حفظ التحضير.")
+                st.experimental_rerun()
+
+    st.subheader("📋 سجل التحضير")
+    if att_df.empty:
+        st.info("لا توجد سجلات.")
+    else:
+        f1, f2 = st.columns(2)
+        with f1:
+            filter_student = st.selectbox("تصفية حسب الطالب", ["الكل"] + bio_df['الاسم'].dropna().tolist())
+        with f2:
+            filter_status = st.selectbox("تصفية حسب الحالة", ["الكل"] + attendance_status)
+
+        view = att_df.copy()
+        if filter_student != "الكل":
+            view = view[view['الاسم'] == filter_student]
+        if filter_status != "الكل":
+            view = view[view['الحالة'] == filter_status]
+
+        st.dataframe(view.sort_values("التاريخ", ascending=False), use_container_width=True)
+
+
+# =========================
+# شاشة الحفظ — قوائم منسدلة قدر الإمكان
+# =========================
+def screen_hifz():
+    st.header("📖 متابعة الحفظ")
+
+    bio_df = load_db(DB_BIO_FILE, BIO_COLUMNS)
+    hifz_df = load_db(DB_HIFZ_FILE, HIFZ_COLUMNS)
+
+    with st.form("hifz_form"):
+        student = st.selectbox("الطالب", [""] + bio_df['الاسم'].dropna().tolist())
+        part = st.selectbox("الجزء", parts_list)
+        surah = st.text_input("السورة")
+        pages = st.number_input("عدد الصفحات", 1, 20)
+        eval_val = st.selectbox("التقييم", hifz_eval_list)
+
+        if st.form_submit_button("حفظ الحفظ"):
+            if not student or not surah:
+                st.error("أكمل البيانات.")
+            else:
+                new_hifz = pd.DataFrame([[student, part, surah, pages, eval_val]], columns=HIFZ_COLUMNS)
+                updated = pd.concat([hifz_df, new_hifz], ignore_index=True)
+                save_db(updated, DB_HIFZ_FILE)
+                st.success("تم حفظ الحفظ.")
+                st.experimental_rerun()
+
+    st.subheader("📋 سجل الحفظ")
+    if hifz_df.empty:
+        st.info("لا توجد سجلات.")
+    else:
+        filter_student = st.selectbox("تصفية حسب الطالب", ["الكل"] + bio_df['الاسم'].dropna().tolist())
+        view = hifz_df.copy()
+        if filter_student != "الكل":
+            view = view[view['الاسم'] == filter_student]
+        st.dataframe(view, use_container_width=True)
+
+
+# =========================
+# شاشة الدرجات — قوائم منسدلة بالكامل
+# =========================
+def screen_grades():
+    st.header("🎯 رصد الدرجات")
+
+    bio_df = load_db(DB_BIO_FILE, BIO_COLUMNS)
+    grades_df = load_db(DB_GRADES_FILE, GRADES_COLUMNS)
+
+    with st.form("grade_form"):
+        student = st.selectbox("الطالب", [""] + bio_df['الاسم'].dropna().tolist())
+        q = st.number_input("القرآن", 0, 100)
+        f = st.number_input("الفقه", 0, 100)
+        h = st.number_input("الحديث", 0, 100)
+        s = st.number_input("السيرة", 0, 100)
+
+        if st.form_submit_button("حفظ الدرجة"):
+            if not student:
+                st.error("اختر الطالب.")
+            else:
+                avg = (q * 0.5) + (((f + h + s) / 3) * 0.5)
+                grade = "ممتاز" if avg >= 90 else "جيد جداً" if avg >= 80 else "جيد" if avg >= 70 else "مقبول"
+                new_grade = pd.DataFrame([[student, q, f, h, s, round(avg, 2), grade]], columns=GRADES_COLUMNS)
+                updated = pd.concat([grades_df[grades_df['الاسم'] != student], new_grade], ignore_index=True)
+                save_db(updated, DB_GRADES_FILE)
+                st.success("تم حفظ الدرجة.")
+                st.experimental_rerun()
+
+    st.subheader("📋 سجل الدرجات")
+    if grades_df.empty:
+        st.info("لا توجد سجلات.")
+    else:
+        st.dataframe(grades_df.sort_values("المعدل", ascending=False), use_container_width=True)
+
+
+# =========================
+# شاشة السجل العام + تقرير شامل للطلاب + تصفير النظام
+# =========================
+def screen_log():
+    st.header("📋 السجل العام والتقارير")
+
+    bio_df = load_db(DB_BIO_FILE, BIO_COLUMNS)
+    att_df = load_db(DB_ATT_FILE, ATT_COLUMNS)
+    hifz_df = load_db(DB_HIFZ_FILE, HIFZ_COLUMNS)
+    grades_df = load_db(DB_GRADES_FILE, GRADES_COLUMNS)
+
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        ["📁 تقرير شامل للطلاب", "✅ التحضير", "📖 الحفظ", "🎯 الدرجات", "🧹 تصفير النظام"]
+    )
+
+    with tab1:
+        st.subheader("📁 تقرير شامل لكل بيانات الطلاب")
+        if bio_df.empty:
+            st.info("لا توجد بيانات طلاب.")
+        else:
+            st.dataframe(bio_df, use_container_width=True)
+            csv = bio_df.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                label="⬇️ تحميل تقرير الطلاب (CSV)",
+                data=csv,
+                file_name="تقرير_الطلاب.csv",
+                mime="text/csv"
+            )
+
+    with tab2:
+        st.subheader("✅ سجلات التحضير")
+        st.dataframe(att_df, use_container_width=True)
+
+    with tab3:
+        st.subheader("📖 سجلات الحفظ")
+        st.dataframe(hifz_df, use_container_width=True)
+
+    with tab4:
+        st.subheader("🎯 سجلات الدرجات")
+        st.dataframe(grades_df, use_container_width=True)
+
+    with tab5:
+        st.subheader("🧹 تصفير النظام بالكامل")
+        st.warning("تنبيه: هذه العملية ستمسح جميع البيانات نهائياً.")
+        if st.button("تصفير كل قواعد البيانات"):
+            reset_all_dbs()
+            st.success("✅ تم تصفير النظام بالكامل. لا توجد الآن أي بيانات سابقة.")
+            st.experimental_rerun()
+
 
 # =========================
 # القائمة الجانبية
 # =========================
-menu = st.sidebar.radio("القائمة الرئيسية", ["🏠 تسجيل البيانات", "🎯 رصد الدرجات", "📋 السجل العام"])
+menu = st.sidebar.radio(
+    "القائمة الرئيسية",
+    ["🏠 بيانات الطلاب", "✅ التحضير اليومي", "📖 متابعة الحفظ", "🎯 رصد الدرجات", "📋 السجل العام"]
+)
 
-# --- 1. شاشة تسجيل البيانات ---
-if menu == "🏠 تسجيل البيانات":
-    st.header("📝 تسجيل بيانات طالب جديد")
-    bio_df = load_data("bio")
-    
-    with st.form("student_form", clear_on_submit=True):
-        name = st.text_input("الاسم الثلاثي")
-        c1, c2 = st.columns(2)
-        with c1:
-            age = st.selectbox("العمر", ages)
-            grade = st.selectbox("الصف", stages)
-        with c2:
-            s_id = st.selectbox("الرقم التسلسلي", ids)
-            phone = st.selectbox("رقم الهاتف", phones)
-        email = st.selectbox("البريد الإلكتروني", emails)
-        
-        if st.form_submit_button("✅ حفظ وإضافة جديد"):
-            if name and s_id:
-                new_row = pd.DataFrame([[name, s_id, age, grade, phone, email]], columns=DB_CONFIG["bio"]["cols"])
-                updated_df = pd.concat([bio_df, new_row], ignore_index=True)
-                save_data(updated_df, "bio")
-                st.success(f"✔️ تم حفظ الطالب {name} بنجاح!")
-                st.rerun()
-            else:
-                st.warning("⚠️ يرجى ملء الاسم والرقم التسلسلي على الأقل")
-
-# --- 2. شاشة رصد الدرجات ---
+if menu == "🏠 بيانات الطلاب":
+    screen_students()
+elif menu == "✅ التحضير اليومي":
+    screen_attendance()
+elif menu == "📖 متابعة الحفظ":
+    screen_hifz()
 elif menu == "🎯 رصد الدرجات":
-    st.header("🎯 رصد درجات الطلاب")
-    bio = load_data("bio")
-    grades_df = load_data("grades")
-    
-    if bio.empty:
-        st.info("💡 لا يوجد طلاب مسجلين حالياً. يرجى تسجيل الطلاب أولاً.")
-    else:
-        with st.form("grades_form", clear_on_submit=True):
-            st_name = st.selectbox("اختر الطالب", [""] + bio['الاسم'].tolist())
-            c1, c2 = st.columns(2)
-            q = c1.number_input("القرآن (50%)", 0, 100)
-            f = c1.number_input("الفقه", 0, 100)
-            h = c2.number_input("الحديث", 0, 100)
-            s = c2.number_input("السيرة", 0, 100)
-            
-            if st.form_submit_button("🚀 ترحيل الدرجة"):
-                if st_name:
-                    avg = (q * 0.5) + (((f + h + s) / 3) * 0.5)
-                    if avg >= 90: تقدير = "ممتاز"
-                    elif avg >= 80: تقدير = "جيد جداً"
-                    elif avg >= 70: تقدير = "جيد"
-                    else: تقدير = "مقبول"
-                    
-                    new_g = pd.DataFrame([[st_name, q, f, h, s, round(avg, 2), تقدير]], columns=DB_CONFIG["grades"]["cols"])
-                    updated_g = pd.concat([grades_df[grades_df['الاسم'] != st_name], new_g], ignore_index=True)
-                    save_data(updated_g, "grades")
-                    st.success(f"✅ تم ترحيل درجة {st_name} بمعدل {round(avg,2)}% ({تقدير})")
-                    st.rerun()
-
-# --- 3. السجل العام (حل مشكلة التنسيق) ---
+    screen_grades()
 elif menu == "📋 السجل العام":
-    st.header("📋 قواعد البيانات المركزية")
-    tab1, tab2 = st.tabs(["👥 سجل الطلاب", "📊 سجل الدرجات"])
-    
-    with tab1:
-        st.subheader("🗂️ بيانات الطلاب المسجلة")
-        st.dataframe(load_data("bio"), use_container_width=True)
-        
-    with tab2:
-        st.subheader("📈 نتائج الاختبارات")
-        st.dataframe(load_data("grades"), use_container_width=True)
-
-    if st.sidebar.button("🧹 تصفير النظام"):
-        if os.path.exists("db_bio.csv"): os.remove("db_bio.csv")
-        if os.path.exists("db_grades.csv"): os.remove("db_grades.csv")
-        st.sidebar.success("تم مسح البيانات بنجاح")
-        st.rerun()
+    screen_log()
