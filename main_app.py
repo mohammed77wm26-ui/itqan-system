@@ -20,12 +20,24 @@ def load_data(key):
     if not os.path.exists(config["file"]):
         pd.DataFrame(columns=config["cols"]).to_csv(config["file"], index=False, encoding="utf-8-sig")
     df = pd.read_csv(config["file"], encoding="utf-8-sig")
-    df = df.reindex(columns=config["cols"]).fillna("")
-    return df
+    return df.reindex(columns=config["cols"]).fillna("")
 
 def save_data(df, key):
     config = DB_CONFIG[key]
     df.to_csv(config["file"], index=False, encoding="utf-8-sig")
+
+# =========================
+# دالة توليد المعرف تلقائياً (ID)
+# =========================
+def generate_auto_id(df):
+    if df.empty:
+        return "ID-100"
+    try:
+        # استخراج الأرقام فقط من الـ ID وتحويلها لانتجر
+        last_id = df['الرقم'].str.extract('(\d+)').astype(int).max().iloc[0]
+        return f"ID-{last_id + 1}"
+    except:
+        return "ID-100"
 
 # =========================
 # نظام الدخول
@@ -47,98 +59,66 @@ if not st.session_state.auth:
 # القوائم الثابتة
 stages = ["", "الأول الابتدائي", "الثاني الابتدائي", "الثالث الابتدائي", "الرابع الابتدائي", "الخامس الابتدائي", "السادس الابتدائي", "الأول المتوسط", "الثاني المتوسط", "الثالث المتوسط", "الأول الثانوي", "الثاني الثانوي", "الثالث الثانوي", "جامعي"]
 ages = [""] + [str(i) for i in range(5, 51)]
-ids = [""] + [f"ID-{i}" for i in range(100, 1000)]
 phones = [""] + [f"05{str(i).zfill(8)}" for i in range(1, 1000)]
 emails = ["", "student@itqan.com", "user@itqan.com", "admin@itqan.com"]
 att_status = ["حاضر", "غائب", "متأخر", "معتذر"]
 parts = [str(i) for i in range(1, 31)]
 
-menu = st.sidebar.radio("القائمة الرئيسية", ["🏠 تسجيل الطلاب", "✅ التحضير اليومي", "📖 متابعة الحفظ", "🎯 رصد الدرجات", "📋 السجل العام"])
+menu = st.sidebar.radio("القائمة الرئيسية", ["🏠 إدارة الطلاب", "✅ التحضير اليومي", "📖 متابعة الحفظ", "🎯 رصد الدرجات", "📋 السجل العام"])
 
-# --- 1. شاشة تسجيل الطلاب (تم إضافة التعديل والحذف) ---
-if menu == "🏠 تسجيل الطلاب":
+# --- 1. شاشة إدارة الطلاب (تعديل، حذف، ID تلقائي) ---
+if menu == "🏠 إدارة الطلاب":
     st.header("📝 إدارة بيانات الطلاب")
     df = load_data("bio")
     
-    t1, t2 = st.tabs(["➕ إضافة جديد", "⚙️ تعديل وحذف"])
-    
-    with t1:
-        with st.form("bio_form", clear_on_submit=True):
-            name = st.text_input("الاسم الثلاثي")
-            c1, c2 = st.columns(2)
-            with c1:
-                age = st.selectbox("العمر", ages, key="add_age")
-                grade = st.selectbox("الصف الدراسي", stages, key="add_grade")
-            with c2:
-                s_id = st.selectbox("الرقم التسلسلي", ids, key="add_id")
-                phone = st.selectbox("رقم الهاتف", phones, key="add_phone")
-            email = st.selectbox("البريد الإلكتروني", emails, key="add_email")
-            if st.form_submit_button("✅ حفظ البيانات"):
-                if name and s_id:
-                    new_row = pd.DataFrame([[name, s_id, age, grade, phone, email]], columns=DB_CONFIG["bio"]["cols"])
-                    save_data(pd.concat([df, new_row], ignore_index=True), "bio")
-                    st.success("✔️ تم الحفظ")
-                    st.rerun()
+    # اختيار وضع: إضافة جديد أو تعديل موجود
+    student_list = ["➕ إضافة طالب جديد"] + df['الاسم'].tolist()
+    choice = st.selectbox("🎯 اختر إجراءً:", student_list)
 
-    with t2:
-        if not df.empty:
-            edit_name = st.selectbox("اختر طالب للتعديل أو الحذف", [""] + df['الاسم'].tolist())
-            if edit_name:
-                student_data = df[df['الاسم'] == edit_name].iloc[0]
-                with st.form("edit_form"):
-                    new_n = st.text_input("الاسم", value=student_data['الاسم'])
-                    c1, c2 = st.columns(2)
-                    new_a = c1.selectbox("العمر", ages, index=ages.index(str(student_data['العمر'])) if str(student_data['العمر']) in ages else 0)
-                    new_g = c1.selectbox("الصف", stages, index=stages.index(student_data['الصف']) if student_data['الصف'] in stages else 0)
-                    new_i = c2.selectbox("الرقم", ids, index=ids.index(student_data['الرقم']) if student_data['الرقم'] in ids else 0)
-                    new_p = c2.selectbox("الهاتف", phones, index=phones.index(student_data['الهاتف']) if student_data['الهاتف'] in phones else 0)
-                    
-                    col_b1, col_b2 = st.columns(2)
-                    if col_b1.form_submit_button("💾 حفظ التعديلات"):
-                        df.loc[df['الاسم'] == edit_name, ['الاسم', 'الرقم', 'العمر', 'الصف', 'الهاتف']] = [new_n, new_i, new_a, new_g, new_p]
-                        save_data(df, "bio")
-                        st.success("تم التعديل")
-                        st.rerun()
-                    if col_b2.form_submit_button("🗑️ حذف الطالب", type="primary"):
-                        df = df[df['الاسم'] != edit_name]
-                        save_data(df, "bio")
-                        st.warning("تم الحذف")
-                        st.rerun()
-        else:
-            st.info("لا يوجد طلاب مسجلين.")
+    # تجهيز القيم الافتراضية
+    if choice == "➕ إضافة طالب جديد":
+        v_name, v_age, v_grade, v_phone, v_email = "", "", "", "", ""
+        v_id = generate_auto_id(df)
+        btn_label = "✅ حفظ الطالب الجديد"
+    else:
+        row = df[df['الاسم'] == choice].iloc[0]
+        v_name, v_id, v_age, v_grade, v_phone, v_email = row['الاسم'], row['الرقم'], str(row['العمر']), str(row['الصف']), str(row['الهاتف']), str(row['الإيميل'])
+        btn_label = "💾 تحديث البيانات"
 
-# --- 3. شاشة الحفظ (تم إضافة المعادلة الآلية للتقييم) ---
-elif menu == "📖 متابعة الحفظ":
-    st.header("📖 متابعة حفظ القرآن")
-    bio = load_data("bio")
-    hifz_df = load_data("hifz")
-    with st.form("hifz_form", clear_on_submit=True):
-        student = st.selectbox("الطالب", [""] + bio['الاسم'].tolist())
+    with st.form("bio_form", clear_on_submit=(choice == "➕ إضافة طالب جديد")):
+        st.info(f"🆔 المعرف (ID): {v_id}")
+        name = st.text_input("الاسم الثلاثي", value=v_name)
         c1, c2 = st.columns(2)
-        part = c1.selectbox("الجزء", parts)
-        surah = c1.text_input("السورة")
-        pages = c2.number_input("عدد الصفحات المحفوظة اليوم", 1, 20)
+        with c1:
+            age = st.selectbox("العمر", ages, index=ages.index(v_age) if v_age in ages else 0)
+            grade = st.selectbox("الصف", stages, index=stages.index(v_grade) if v_grade in stages else 0)
+        with c2:
+            phone = st.selectbox("رقم الهاتف", phones, index=phones.index(v_phone) if v_phone in phones else 0)
+            email = st.selectbox("البريد الإلكتروني", emails, index=emails.index(v_email) if v_email in emails else 0)
         
-        st.info("💡 التقييم يتم آلياً بناءً على عدد الصفحات")
+        col_btn1, col_btn2 = st.columns([1, 4])
+        with col_btn2:
+            submitted = st.form_submit_button(btn_label)
         
-        if st.form_submit_button("💾 حفظ السجل"):
-            if student and surah:
-                # --- معادلة التقييم الآلي ---
-                if pages >= 15: eval_val = "ممتاز"
-                elif pages >= 10: eval_val = "جيد جداً"
-                elif pages >= 5: eval_val = "جيد"
-                else: eval_val = "مقبول"
-                
-                new_h = pd.DataFrame([[student, part, surah, pages, eval_val]], columns=DB_CONFIG["hifz"]["cols"])
-                save_data(pd.concat([hifz_df, new_h], ignore_index=True), "hifz")
-                st.success(f"✔️ تم الحفظ. التقييم المستحق: {eval_val}")
+        if submitted:
+            if name:
+                # حذف القديم إذا كان تعديل
+                updated_df = df[df['الاسم'] != choice] if choice != "➕ إضافة طالب جديد" else df
+                new_row = pd.DataFrame([[name, v_id, age, grade, phone, email]], columns=DB_CONFIG["bio"]["cols"])
+                save_data(pd.concat([updated_df, new_row], ignore_index=True), "bio")
+                st.success("✔️ تم الحفظ بنجاح")
                 st.rerun()
 
-# --- بقية الشاشات (التحضير، الدرجات، السجل) تبقى كما هي لضمان الاستقرار ---
+    if choice != "➕ إضافة طالب جديد":
+        if st.button("🗑️ حذف هذا الطالب نهائياً"):
+            save_data(df[df['الاسم'] != choice], "bio")
+            st.warning("🚮 تم حذف الطالب من السجلات")
+            st.rerun()
+
+# --- 2. شاشة التحضير ---
 elif menu == "✅ التحضير اليومي":
     st.header("✅ سجل الحضور والغياب")
-    bio = load_data("bio")
-    att_df = load_data("att")
+    bio, att_df = load_data("bio"), load_data("att")
     with st.form("att_form", clear_on_submit=True):
         date_val = st.date_input("التاريخ", datetime.today())
         student = st.selectbox("اختر الطالب", [""] + bio['الاسم'].tolist())
@@ -147,31 +127,53 @@ elif menu == "✅ التحضير اليومي":
             if student:
                 new_att = pd.DataFrame([[date_val.strftime("%Y-%m-%d"), student, status]], columns=DB_CONFIG["att"]["cols"])
                 save_data(pd.concat([att_df, new_att], ignore_index=True), "att")
-                st.success(f"✔️ تم التحضير")
+                st.success("✔️ تم التحضير")
                 st.rerun()
 
+# --- 3. شاشة الحفظ (تقييم آلي بناءً على عدد الصفحات) ---
+elif menu == "📖 متابعة الحفظ":
+    st.header("📖 متابعة حفظ القرآن")
+    bio, hifz_df = load_data("bio"), load_data("hifz")
+    with st.form("hifz_form", clear_on_submit=True):
+        student = st.selectbox("الطالب", [""] + bio['الاسم'].tolist())
+        part = st.selectbox("الجزء", parts)
+        surah = st.text_input("السورة")
+        pages = st.number_input("عدد الصفحات", 1, 20)
+        
+        if st.form_submit_button("💾 حفظ سجل الحفظ"):
+            if student and surah:
+                # --- معادلة التقييم الآلية ---
+                if pages >= 5: eval_val = "ممتاز"
+                elif pages >= 3: eval_val = "جيد جداً"
+                elif pages >= 2: eval_val = "جيد"
+                else: eval_val = "مقبول"
+                
+                new_h = pd.DataFrame([[student, part, surah, pages, eval_val]], columns=DB_CONFIG["hifz"]["cols"])
+                save_data(pd.concat([hifz_df, new_h], ignore_index=True), "hifz")
+                st.success(f"✔️ تم الحفظ بنجاح | التقييم الآلي: {eval_val}")
+                st.rerun()
+
+# --- 4. شاشة الدرجات ---
 elif menu == "🎯 رصد الدرجات":
-    st.header("🎯 رصد الدرجات")
-    bio = load_data("bio")
-    grades_df = load_data("grades")
+    st.header("🎯 رصد الدرجات النهائية")
+    bio, grades_df = load_data("bio"), load_data("grades")
     with st.form("grade_form", clear_on_submit=True):
         student = st.selectbox("الطالب", [""] + bio['الاسم'].tolist())
         c1, c2 = st.columns(2)
-        q = c1.number_input("القرآن", 0, 100)
-        f = c1.number_input("الفقه", 0, 100)
-        h = c2.number_input("الحديث", 0, 100)
-        s = c2.number_input("السيرة", 0, 100)
-        if st.form_submit_button("🚀 ترحيل"):
+        q, f = c1.number_input("القرآن", 0, 100), c1.number_input("الفقه", 0, 100)
+        h, s = c2.number_input("الحديث", 0, 100), c2.number_input("السيرة", 0, 100)
+        if st.form_submit_button("🚀 ترحيل الدرجة"):
             if student:
                 avg = (q * 0.5) + (((f + h + s) / 3) * 0.5)
                 t = "ممتاز" if avg >= 90 else "جيد جداً" if avg >= 80 else "جيد" if avg >= 70 else "مقبول"
                 new_g = pd.DataFrame([[student, q, f, h, s, round(avg, 2), t]], columns=DB_CONFIG["grades"]["cols"])
                 save_data(pd.concat([grades_df[grades_df['الاسم'] != student], new_g], ignore_index=True), "grades")
-                st.success("✔️ تم الحفظ")
+                st.success("✔️ تم الترحيل")
                 st.rerun()
 
+# --- 5. السجل العام ---
 elif menu == "📋 السجل العام":
-    st.header("📋 السجلات")
+    st.header("📋 التقارير العامة")
     t1, t2, t3, t4 = st.tabs(["الطلاب", "التحضير", "الحفظ", "الدرجات"])
     with t1: st.dataframe(load_data("bio"), use_container_width=True)
     with t2: st.dataframe(load_data("att"), use_container_width=True)
